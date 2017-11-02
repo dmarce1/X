@@ -12,6 +12,8 @@
 #include "immintrin.h"
 #include "state.hpp"
 
+#define WARP_SIZE 32
+
 template<>
 struct constants<real> {
 	static constexpr real zero = 0.0;
@@ -173,43 +175,42 @@ real minmod(const real& a, const real& b) {
 
 template<class T>
 EXPORT_GLOBAL
-T hydro_compute_du(const state_var<T>& u00, const state_var<T>* const _um2, const state_var<T>* const _um1, const state_var<T>* const _up1,
-		const state_var<T>* const _up2, state_var<T>& dU, real dx[NDIM], int rk) {
+T hydro_compute_du(const state_var<T>& u00, const state_var<T>& um2, const state_var<T>& um1, const state_var<T>& up1, const state_var<T>& up2,
+		state_var<T>& dU, real dx[NDIM], int rk, int dim) {
 	T ap, am, a;
 	real beta;
 	if (rk == 1) {
-		for (int f = 0; f != NF; ++f) {
-			dU[f] = -half * dU[f];
+		{
+			if (dim == 0)
+				for (int f = 0; f != NF; ++f) {
+					dU[f] = -half * dU[f];
+				}
 		}
 		beta = half;
 	} else if (rk == 0) {
-		for (int f = 0; f != NF; ++f) {
-			dU[f] = constants<T>::zero;
+		if (dim == 0) {
+			for (int f = 0; f != NF; ++f) {
+				dU[f] = constants<T>::zero;
+			}
 		}
 		beta = one;
 	}
-	for (int dim = 0; dim != NDIM; ++dim) {
-		const real c0 = beta / dx[dim];
-		const state_var<T>& up1 = _up1[dim];
-		const state_var<T>& up2 = _up2[dim];
-		const state_var<T>& um1 = _um1[dim];
-		const state_var<T>& um2 = _um2[dim];
-		state_pair<T> um, up;
-		for (int f = 0; f != NF; ++f) {
-			const T slp_p = minmod(up2[f] - up1[f], up1[f] - u00[f]);
-			const T slp_0 = minmod(up1[f] - u00[f], u00[f] - um1[f]);
-			const T slp_m = minmod(u00[f] - um1[f], um1[f] - um2[f]);
-			um.L[f] = um1[f] + 0.5 * slp_m;
-			um.R[f] = u00[f] - 0.5 * slp_0;
-			up.L[f] = u00[f] + 0.5 * slp_0;
-			up.R[f] = up1[f] - 0.5 * slp_p;
-		}
-		const auto fp = up.flux(dim, ap);
-		const auto fm = um.flux(dim, am);
-		a = max(ap, am);
-		for (int f = 0; f != NF; ++f) {
-			dU[f] -= (fp[f] - fm[f]) * c0;
-		}
+	const real c0 = beta / dx[dim];
+	state_pair<T> um, up;
+	for (int f = 0; f != NF; ++f) {
+		const T slp_p = minmod(up2[f] - up1[f], up1[f] - u00[f]);
+		const T slp_0 = minmod(up1[f] - u00[f], u00[f] - um1[f]);
+		const T slp_m = minmod(u00[f] - um1[f], um1[f] - um2[f]);
+		um.L[f] = um1[f] + 0.5 * slp_m;
+		um.R[f] = u00[f] - 0.5 * slp_0;
+		up.L[f] = u00[f] + 0.5 * slp_0;
+		up.R[f] = up1[f] - 0.5 * slp_p;
+	}
+	const auto fp = up.flux(dim, ap);
+	const auto fm = um.flux(dim, am);
+	a = max(ap, am);
+	for (int f = 0; f != NF; ++f) {
+		dU[f] -= (fp[f] - fm[f]) * c0;
 	}
 	return a;
 }
@@ -241,21 +242,23 @@ __global__
 void hydro_gpu_kernel(state_var<real>* U, state_var<real>* dU, real* aret, int nx, int ny, int nz, real dx, real dy, real dz, int rk) {
 	real dX[NDIM] = { dx, dy, dz };
 	int D[NDIM] = { 1, nx, nx * ny };
-	const int xi = threadIdx.x + BW;
-	const int yi = blockIdx.x + BW;
-	const int zi = blockIdx.y + BW;
+	const int xi = blockIdx.x * WARP_SIZE + threadIdx.x + BW;
+	const int yi = blockIdx.y + BW;
+	const int zi = blockIdx.z + BW;
 	const int idx = xi + nx * (yi + ny * zi);
-	state_var<real> up1[NDIM];
-	state_var<real> up2[NDIM];
-	state_var<real> um1[NDIM];
-	state_var<real> um2[NDIM];
+	state_var<real> up1;
+	state_var<real> up2;
+	state_var<real> um1;
+	state_var<real> um2;
+	real a = 0.0;
 	for (int dim = 0; dim != NDIM; ++dim) {
-		up1[dim] = U[idx + D[dim]];
-		up2[dim] = U[idx + 2 * D[dim]];
-		um1[dim] = U[idx - D[dim]];
-		um2[dim] = U[idx - 2 * D[dim]];
+		up1 = U[idx + D[dim]];
+		up2 = U[idx + 2 * D[dim]];
+		um1 = U[idx - D[dim]];
+		um2 = U[idx - 2 * D[dim]];
+		const real this_a = hydro_compute_du(U[idx], um2, um1, up1, up2, dU[idx], dX, rk, dim);
+		a = max(this_a, a);
 	}
-	const real a = hydro_compute_du(U[idx], um2, um1, up1, up2, dU[idx], dX, rk);
 	if (aret) {
 		aret[idx] = a;
 	}
@@ -272,23 +275,29 @@ void hydro_cpu_kernel(state_var<real>* U, state_var<real>* dU, real* aret, int n
 				const int idx = xi + nx * (yi + ny * zi);
 				state_var<simd> u0;
 				state_var<simd> du;
-				state_var<simd> up1[NDIM];
-				state_var<simd> up2[NDIM];
-				state_var<simd> um1[NDIM];
-				state_var<simd> um2[NDIM];
+				state_var<simd> up1;
+				state_var<simd> up2;
+				state_var<simd> um1;
+				state_var<simd> um2;
 				for (int i = 0; i < simd_size; ++i) {
 					for (int f = 0; f != NF; ++f) {
 						u0[f][i] = U[idx + i][f];
 						du[f][i] = dU[idx + i][f];
-						for (int dim = 0; dim != NDIM; ++dim) {
-							up1[dim][f][i] = U[idx + D[dim] + i][f];
-							up2[dim][f][i] = U[idx + 2 * D[dim] + i][f];
-							um1[dim][f][i] = U[idx - D[dim] + i][f];
-							um2[dim][f][i] = U[idx - 2 * D[dim] + i][f];
-						}
 					}
 				}
-				const auto a = hydro_compute_du<simd>(u0, um2, um1, up1, up2, du, dX, rk);
+				simd a = constants<simd>::zero;
+				for (int dim = 0; dim != NDIM; ++dim) {
+					for (int i = 0; i < simd_size; ++i) {
+						for (int f = 0; f != NF; ++f) {
+							up1[f][i] = U[idx + D[dim] + i][f];
+							up2[f][i] = U[idx + 2 * D[dim] + i][f];
+							um1[f][i] = U[idx - D[dim] + i][f];
+							um2[f][i] = U[idx - 2 * D[dim] + i][f];
+						}
+					}
+					const auto this_a = hydro_compute_du<simd>(u0, um2, um1, up1, up2, du, dX, rk, dim);
+					a = max(a, this_a);
+				}
 				for (int i = 0; i < simd_size; ++i) {
 					for (int f = 0; f != NF; ++f) {
 						dU[idx + i][f] = du[f][i];
@@ -355,13 +364,13 @@ void hydro_boundary_call(device_vector<state_var<real>>& U, int nx, int ny, int 
 #endif
 }
 
-void hydro_kernel(device_vector<state_var<real>>& U, device_vector<state_var<real>>& dU, device_vector<double>& a, int nx, int ny, int nz, real dx, real dy, real dz,
-		int rk) {
+void hydro_kernel(device_vector<state_var<real>>& U, device_vector<state_var<real>>& dU, device_vector<double>& a, int nx, int ny, int nz, real dx, real dy,
+		real dz, int rk) {
 #ifdef USE_CPU
 	hydro_cpu_kernel(U.data(), dU.data(), a.data(), nx, ny, nz, dx, dy, dz, rk);
 #else
-	dim3 threads(nx - 2 * BW);
-	dim3 blocks(ny - 2 * BW, nz - 2 * BW);
+	dim3 threads(WARP_SIZE);
+	dim3 blocks((nx - 2 * BW) / WARP_SIZE, ny - 2 * BW, nz - 2 * BW);
 	hydro_gpu_kernel<<<blocks,threads>>>(U.data().get(), dU.data().get(), a.data().get(), nx, ny, nz, dx, dy, dz, rk );
 #endif
 }
