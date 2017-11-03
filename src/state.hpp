@@ -11,7 +11,6 @@
 //#define USE_CPU
 #define USE_GPU
 
-
 static constexpr int NDIM = 3;
 static constexpr int NS = 0;
 static constexpr int NF = 6 + NS;
@@ -20,6 +19,12 @@ static constexpr int NF = 6 + NS;
 #define EXPORT_GLOBAL __host__ __device__
 
 using real = double;
+#define rho_i 0
+#define egas_i 1
+#define tau_i 2
+#define momx_i  3
+#define momy_i 4
+#define momz_i  5
 
 #ifdef __CUDA_ARCH__
 #undef USE_CPU
@@ -134,7 +139,24 @@ public:
 	EXPORT_GLOBAL void set_tau() {
 		tau() = pow(eint(), T(1) / FGAMMA);
 	}
+	state_var() = default;
+	state_var(const state_var&) = default;
+	state_var(state_var&&) = default;
+	state_var& operator=(const state_var&) = default;
+	state_var& operator=(state_var&&) = default;
+
+	EXPORT_GLOBAL state_var(real* u, int i, int D) {
+		for (int f = 0; f != NF; ++f) {
+			(*this)[f] = u[f * D + i];
+		}
+	}
 };
+
+EXPORT_GLOBAL inline void set_state_var(real* u, int i, state_var<real>& var, int D) {
+	for (int f = 0; f != NF; ++f) {
+		u[f * D + i] = var[f];
+	}
+}
 
 template<class T>
 struct state_pair {
