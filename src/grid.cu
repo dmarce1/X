@@ -3,58 +3,68 @@
 #include "cpu.hpp"
 #include "gpu.hpp"
 
-
-
-void hydro_boundary_call(device_vector<real>& U, int nx, int ny, int nz) {
-#ifdef USE_CPU
-	hydro_cpu_boundaries(U.data(), nx, ny, nz);
-#else
-	hydro_gpu_x_boundaries<<<nz, ny>>>(U.data().get(),nx,ny,nz);
-	hydro_gpu_y_boundaries<<<nz, nx>>>(U.data().get(),nx,ny,nz);
-	hydro_gpu_z_boundaries<<<ny, nx>>>(U.data().get(),nx,ny,nz);
-#endif
+void grid::hydro_boundary_call(grid_exec_policy policy) {
+	switch (policy) {
+	case CPU:
+		hydro_cpu_boundaries(U.data(), nx, ny, nz);
+		break;
+	case GPU:
+		hydro_gpu_x_boundaries<<<nz, ny>>>(gpu_U.data().get(),nx,ny,nz);
+		hydro_gpu_y_boundaries<<<nz, nx>>>(gpu_U.data().get(),nx,ny,nz);
+		hydro_gpu_z_boundaries<<<ny, nx>>>(gpu_U.data().get(),nx,ny,nz);
+		cudaThreadSynchronize();
+		break;
+	}
 }
 
-void hydro_kernel(device_vector<real>& U, device_vector<state_var<real>>& dU, device_vector<double>& a, int nx, int ny, int nz, real dx, real dy, real dz,
-		int rk) {
-#ifdef USE_CPU
-	hydro_cpu_kernel(U.data(), dU.data(), a.data(), nx, ny, nz, dx, dy, dz, rk);
-#else
-	dim3 threads(WARP_SIZE);
-	dim3 blocks((nx - 2 * BW) / WARP_SIZE, ny - 2 * BW, nz - 2 * BW);
-	hydro_gpu_kernel<<<blocks,threads>>>(U.data().get(), dU.data().get(), a.data().get(), nx, ny, nz, dx, dy, dz, rk );
-#endif
+void grid::hydro_kernel(grid_exec_policy policy, int rk) {
+	switch (policy) {
+	case CPU:
+		hydro_cpu_kernel(U.data(), dU.data(), a.data(), nx, ny, nz, dx, dy, dz, rk);
+		break;
+	case GPU:
+		dim3 threads(WARP_SIZE);
+		dim3 blocks((nx - 2 * BW) / WARP_SIZE, ny - 2 * BW, nz - 2 * BW);
+		hydro_gpu_kernel<<<blocks,threads>>>(gpu_U.data().get(), gpu_dU.data().get(), gpu_a.data().get(), nx, ny, nz, dx, dy, dz, rk );
+		cudaThreadSynchronize();
+		break;
+	}
 }
 
-void hydro_compute_u(device_vector<real>& U, device_vector<state_var<real>>& dU, int nx, int ny, int nz, real dt, int rk) {
-#ifdef USE_CPU
-	hydro_cpu_compute_u(U.data(), dU.data(), nx, ny, nz, dt, rk);
-#else
-	dim3 threads(nx - 2 * BW);
-	dim3 blocks(ny - 2 * BW, nz - 2 * BW);
-	hydro_gpu_compute_u<<<blocks,threads>>>(U.data().get(), dU.data().get(), nx, ny, nz, dt, rk);
-#endif
+void grid::hydro_compute_u(grid_exec_policy policy, real dt, int rk) {
+	switch (policy) {
+	case CPU:
+		hydro_cpu_compute_u(U.data(), dU.data(), nx, ny, nz, dt, rk);
+		break;
+	case GPU:
+		dim3 threads(nx - 2 * BW);
+		dim3 blocks(ny - 2 * BW, nz - 2 * BW);
+		hydro_gpu_compute_u<<<blocks,threads>>>(gpu_U.data().get(), gpu_dU.data().get(), nx, ny, nz, dt, rk);
+		cudaThreadSynchronize();
+		break;
+	}
 }
-
 
 int grid::index(int i, int j, int k) const {
 	return i + dims[XDIM] * (j + dims[YDIM] * k);
 }
 
 real grid::x(int i) const {
-	return dx[XDIM] * (real(i) + 0.5);
+	return dx * (real(i) + 0.5);
 }
 
 real grid::y(int i) const {
-	return dx[YDIM] * (real(i) + 0.5);
+	return dy * (real(i) + 0.5);
 }
 
 real grid::z(int i) const {
-	return dx[ZDIM] * (real(i) + 0.5);
+	return dz * (real(i) + 0.5);
 }
 
-grid::grid(int nx, int ny, int nz, double spanx, double spany, double spanz) :
-		fgamma(5.0 / 3.0), size(nx * ny * nz), dims( { nx, ny, nz }), dx( { spanx / real(nx), spany / real(ny), spanz / real(nz) }), U(NF * size), dU(size) {
+grid::grid(int _nx, int _ny, int _nz, double spanx, double spany, double spanz) :
+		fgamma(5.0 / 3.0), size(_nx * _ny * _nz), dims( { _nx, _ny, _nz }), dX( { spanx / real(_nx), spany / real(_ny), spanz / real(_nz) }), U(NF * size), dU(
+				size), a(size, 0.0), gpu_U(NF * size), gpu_dU(size), gpu_a(size), nx(dims[XDIM]), ny(dims[YDIM]), nz(dims[ZDIM]), dx(dX[XDIM]), dy(dX[YDIM]), dz(
+				dX[ZDIM]) {
 }
 
 void grid::initialize(initial_value_type type) {
@@ -85,9 +95,9 @@ void grid::output(std::string filename) const {
 		for (int yi = 0; yi != dims[YDIM] + 1; ++yi) {
 			for (int zi = 0; zi != dims[ZDIM] + 1; ++zi) {
 				const int iii = xi + (dims[XDIM] + 1) * (yi + (dims[YDIM] + 1) * zi);
-				coords[0][iii] = xi * dx[XDIM];
-				coords[1][iii] = yi * dx[YDIM];
-				coords[2][iii] = zi * dx[ZDIM];
+				coords[0][iii] = xi * dx;
+				coords[1][iii] = yi * dy;
+				coords[2][iii] = zi * dz;
 			}
 		}
 	}
@@ -118,23 +128,34 @@ void grid::output(std::string filename) const {
 	delete[] names;
 }
 
-real grid::step() {
-	static device_vector<real> a;
-	a.resize(size);
-	device_vector<real> d_U(U);
-	device_vector<state_var<real>> d_dU(dU);
+real grid::max_speed(grid_exec_policy policy) {
+	real amax;
+	switch (policy) {
+	case GPU:
+		amax = *thrust::max_element(gpu_a.begin(), gpu_a.end());
+		break;
+	case CPU:
+		amax = *thrust::max_element(a.begin(), a.end());
+		break;
+	}
+	return amax;
+}
 
-	hydro_kernel(U, dU, a, dims[XDIM], dims[YDIM], dims[ZDIM], dx[XDIM], dx[YDIM], dx[ZDIM], 0);
-	const auto amax = max_ele(a.begin(), a.end());
+real grid::step(grid_exec_policy policy) {
+	if (policy == GPU) {
+		gpu_U = U;
+	}
+	hydro_kernel(policy, 0);
+	const auto amax = max_speed(policy);
 	const auto dt = 0.4 / amax;
-	hydro_compute_u(U, dU, dims[XDIM], dims[YDIM], dims[ZDIM], dt, 0);
-	hydro_boundary_call(U, dims[XDIM], dims[YDIM], dims[ZDIM]);
-	hydro_kernel(U, dU, a, dims[XDIM], dims[YDIM], dims[ZDIM], dx[XDIM], dx[YDIM], dx[ZDIM], 1);
-	hydro_compute_u(U, dU, dims[XDIM], dims[YDIM], dims[ZDIM], dt, 1);
-	hydro_boundary_call(U, dims[XDIM], dims[YDIM], dims[ZDIM]);
-#ifdef USE_GPU
-	cudaThreadSynchronize();
-#endif
+	hydro_compute_u(policy, dt, 0);
+	hydro_boundary_call(policy);
+	hydro_kernel(policy, 1);
+	hydro_compute_u(policy, dt, 1);
+	hydro_boundary_call(policy);
+	if (policy == GPU) {
+		U = gpu_U;
+	}
 	return dt;
 }
 

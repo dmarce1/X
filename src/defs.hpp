@@ -8,9 +8,6 @@
 #ifndef DEFS_HPP_
 #define DEFS_HPP_
 
-#define USE_CPU
-//#define USE_GPU
-
 #include <vector>
 
 #define WARP_SIZE 32
@@ -45,42 +42,5 @@ struct constants<real> {
 #ifndef _CXX_SOURCE
 #include <thrust/device_vector.h>
 #endif
-
-#ifdef USE_CPU
-
-template<class T>
-using host_vector = std::vector<T>;
-
-template<class T>
-using device_vector = std::vector<T>;
-
-template<class It>
-real max_ele(It&& b, It&& e) {
-	auto m = *b;
-	for (It i = b + 1; i != e; ++i) {
-		m = max(m, *i);
-	}
-	return m;
-}
-
-#else
-
-#ifndef _CXX_SOURCE
-template<class T>
-using device_vector = thrust::device_vector<T>;
-
-template<class T>
-using host_vector = thrust::host_vector<T>;
-
-template<class It>
-real max_ele(It&& b, It&& e) {
-	auto it = thrust::max_element(std::forward < It > (b),
-			std::forward < It > (e));
-	return *it;
-}
-#endif
-
-#endif
-
 
 #endif /* DEFS_HPP_ */

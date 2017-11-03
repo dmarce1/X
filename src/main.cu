@@ -12,12 +12,12 @@ int main(void) {
 	for (i = 0; i < 10; ++i) {
 		std::string fname = std::string("X.") + std::to_string(i) + std::string(".silo");
 	//	G.output(fname);
-		auto dt = G.step();
+		auto dt = G.step(GPU);
 		printf("%i %e %e\n", i, t, dt);
 		t += dt;
 	}
 	std::string fname = std::string("X.") + std::to_string(i) + std::string(".silo");
-//	G.output(fname);
+	G.output(fname);
 
 	return 0;
 }
