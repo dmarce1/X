@@ -1,4 +1,5 @@
-OBJ=X.o hydro.o gpu.o cpu.o
+OBJ=main.o gpu.o grid.o hydro.o cpu.o initial.o 
+HEADERS=defs.hpp hydro.hpp gpu.hpp cpu.hpp grid.hpp initial.hpp
 LIBRARIES=-lsiloh5 -lpthread -lgomp
 CXX=g++
 CU=nvcc
@@ -9,10 +10,10 @@ CU_FLAGS=--device-c -use_fast_math -gencode arch=compute_61,code=sm_61 -Xcompile
 LD_FLAGS=-gencode arch=compute_61,code=sm_61
 VPATH=./src/:./obj/
 
-%.o: %.cpp
+%.o: %.cpp  $(HEADERS)$
 	g++ $(COMMON_FLAGS) $(CXX_FLAGS) -o ./obj/$@ -c $<
 
-%.o: %.cu
+%.o: %.cu  $(HEADERS)$
 	nvcc $(COMMON_FLAGS) $(CU_FLAGS) -o ./obj/$@ -c $<
 
 all: X

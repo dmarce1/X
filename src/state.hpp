@@ -20,15 +20,10 @@ static constexpr int NF = 6 + NS;
 #define momz_i  5
 
 #ifdef __CUDA_ARCH__
-#undef USE_CPU
-#define USE_GPU
 #else
 typedef real simd __attribute__ ((vector_size (32)));
 #endif
 constexpr int simd_size = 32 / sizeof(real);
-
-template<class T>
-struct constants;
 
 #include "simd.hpp"
 
