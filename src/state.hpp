@@ -8,17 +8,10 @@
 #ifndef STATE_HPP_
 #define STATE_HPP_
 
-//#define USE_CPU
-#define USE_GPU
-
-static constexpr int NDIM = 3;
+#include "defs.hpp"
 static constexpr int NS = 0;
 static constexpr int NF = 6 + NS;
 #define FGAMMA  (5.0 / 3.0)
-
-#define EXPORT_GLOBAL __host__ __device__
-
-using real = double;
 #define rho_i 0
 #define egas_i 1
 #define tau_i 2

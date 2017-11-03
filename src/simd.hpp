@@ -8,9 +8,9 @@
 #ifndef SIMD_HPP_
 #define SIMD_HPP_
 
-static constexpr real zero = 0.0;
-static constexpr real half = 0.5;
-static constexpr real one = 1.0;
+#include <thrust/device_vector.h>
+#include <thrust/transform.h>
+#include <algorithm>
 
 #ifdef USE_CPU
 
