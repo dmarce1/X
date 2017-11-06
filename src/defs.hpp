@@ -39,4 +39,8 @@ struct constants<real> {
 	static constexpr real zero = 0.0;
 };
 
+#ifndef _CXX_SOURCE
+#include <thrust/device_vector.h>
+#endif
+
 #endif /* DEFS_HPP_ */

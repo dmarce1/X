@@ -1,15 +1,15 @@
 FLAGS=-O3 
 #FLAGS=-O0 -g
-OBJ=main.o gpu.o grid.o hydro.o cpu.o initial.o 
-HEADERS=defs.hpp hydro.hpp gpu.hpp cpu.hpp grid.hpp initial.hpp
+OBJ=main.o gpu.o grid.o hydro.o cpu.o initial.o sub_grid.o
+HEADERS=defs.hpp hydro.hpp gpu.hpp cpu.hpp grid.hpp initial.hpp sub_grid.hpp
 LIBRARIES=-lsiloh5 -lpthread -lgomp
 CXX=g++
 CU=nvcc
 LD=nvcc
 COMMON_FLAGS=-std=c++11 $(FLAGS) 
 CXX_FLAGS=-march=native -ffast-math -fopenmp -pthread
-CU_FLAGS=--device-c -use_fast_math -gencode arch=compute_61,code=sm_61 -Xcompiler "$(CXX_FLAGS)"
-LD_FLAGS=-gencode arch=compute_61,code=sm_61
+CU_FLAGS=--device-c -use_fast_math -gencode arch=compute_35,code=sm_35 -Xcompiler "$(CXX_FLAGS)" --default-stream per-thread
+LD_FLAGS=-gencode arch=compute_35,code=sm_35 --default-stream per-thread
 VPATH=./src/:./obj/
 
 %.o: %.cpp  $(HEADERS)$
