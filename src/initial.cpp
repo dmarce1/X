@@ -1,3 +1,4 @@
+#define _CXX_SOURCE
 #include "initial.hpp"
 
 state_var<real> initial_value(initial_value_type type, real x, real y, real z) {

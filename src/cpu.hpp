@@ -14,7 +14,7 @@
 
 
 
-void hydro_cpu_kernel(real* U, state_var<real>* dU, real* aret, int nx, int ny, int nz, real dx, real dy, real dz, int rk);
+void hydro_cpu_kernel(real* U, state_var<real>* dU, float* aret, int nx, int dim, real dx, int rk);
 void hydro_cpu_boundaries(real* U, int nx, int ny, int nz);
 void hydro_cpu_compute_u(real* U, state_var<real>* dU, int nx, int ny, int nz, real dt, int rk);
 

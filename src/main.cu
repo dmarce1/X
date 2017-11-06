@@ -9,15 +9,15 @@ int main(void) {
 	G.initialize(SOD);
 	real t = 0.0;
 	int i;
-	for (i = 0; i < 10; ++i) {
+	for (i = 0; i < 1; ++i) {
 		std::string fname = std::string("X.") + std::to_string(i) + std::string(".silo");
 	//	G.output(fname);
-		auto dt = G.step(GPU);
+		auto dt = G.step(CPU);
 		printf("%i %e %e\n", i, t, dt);
 		t += dt;
 	}
-	std::string fname = std::string("X.") + std::to_string(i) + std::string(".silo");
-	G.output(fname);
+//	std::string fname = std::string("X.") + std::to_string(i) + std::string(".silo");
+//	G.output(fname);
 
 	return 0;
 }

@@ -21,7 +21,7 @@ __global__
 void hydro_gpu_z_boundaries(real* U, int nx, int ny, int nz);
 
 __global__
-void hydro_gpu_kernel(real* U, state_var<real>* dU, real* aret, int nx, int ny,
+void hydro_gpu_kernel(real* U, state_var<real>* dU, float* aret, int nx, int ny,
 		int nz, real dx, real dy, real dz, int rk);
 
 __global__

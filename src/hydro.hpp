@@ -59,15 +59,14 @@ void hydro_compute_u(real* U, state_var<T>* dU, int xi, int yi, int zi, int N[ND
 template<class T>
 EXPORT_GLOBAL
 T hydro_compute_du(const state_var<T>& u00, const state_var<T>& um2, const state_var<T>& um1, const state_var<T>& up1, const state_var<T>& up2,
-		state_var<T>& dU, real dx[NDIM], int rk, int dim) {
+		state_var<T>& dU, real dx, int rk, int dim) {
 	T ap, am, a;
 	real beta;
 	if (rk == 1) {
-		{
-			if (dim == 0)
-				for (int f = 0; f != NF; ++f) {
-					dU[f] = -half * dU[f];
-				}
+		if (dim == 0) {
+			for (int f = 0; f != NF; ++f) {
+				dU[f] = -half * dU[f];
+			}
 		}
 		beta = half;
 	} else if (rk == 0) {
@@ -78,7 +77,7 @@ T hydro_compute_du(const state_var<T>& u00, const state_var<T>& um2, const state
 		}
 		beta = one;
 	}
-	const real c0 = beta / dx[dim];
+	const real c0 = beta / dx;
 	state_pair<T> um, up;
 	for (int f = 0; f != NF; ++f) {
 		const T slp_p = minmod(up2[f] - up1[f], up1[f] - u00[f]);
@@ -95,7 +94,7 @@ T hydro_compute_du(const state_var<T>& u00, const state_var<T>& um2, const state
 	for (int f = 0; f != NF; ++f) {
 		dU[f] -= (fp[f] - fm[f]) * c0;
 	}
-	return a / dx[dim];
+	return a / dx;
 }
 
 #endif /* HYDRO_HPP_ */

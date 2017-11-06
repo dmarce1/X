@@ -11,9 +11,19 @@
 #include "defs.hpp"
 #include "initial.hpp"
 #include <array>
+#include <thrust/device_vector.h>
 
 enum grid_exec_policy {
 	CPU, GPU
+};
+
+struct hydro_1d_t {
+	real* U;
+	state_var<real>* dU;
+	real* a;
+	int size;
+	int dim;
+	real dx;
 };
 
 class grid {
@@ -24,10 +34,11 @@ private:
 	const std::array<real, NDIM> dX;
 	thrust::host_vector<real> U;
 	thrust::host_vector<state_var<real>> dU;
-	thrust::host_vector<real> a;
+	thrust::host_vector<float> a;
 	thrust::device_vector<real> gpu_U;
 	thrust::device_vector<state_var<real>> gpu_dU;
-	thrust::device_vector<real> gpu_a;
+	thrust::device_vector<float> gpu_a;
+	std::array<std::vector<int>, NDIM> map;
 	const int& nx;
 	const int& ny;
 	const int& nz;
@@ -37,7 +48,7 @@ private:
 	void hydro_boundary_call(grid_exec_policy);
 	void hydro_kernel(grid_exec_policy, int rk);
 	void hydro_compute_u(grid_exec_policy, real dt, int rk);
-	real max_speed(grid_exec_policy);
+	float max_speed(grid_exec_policy);
 public:
 	int index(int i, int j, int k) const;
 	real x(int i) const;

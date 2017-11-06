@@ -8,8 +8,8 @@ CU=nvcc
 LD=nvcc
 COMMON_FLAGS=-std=c++11 $(FLAGS) 
 CXX_FLAGS=-march=native -ffast-math -fopenmp -pthread
-CU_FLAGS=--device-c -use_fast_math -gencode arch=compute_35,code=sm_35 -Xcompiler "$(CXX_FLAGS)"
-LD_FLAGS=-gencode arch=compute_35,code=sm_35
+CU_FLAGS=--device-c -use_fast_math -gencode arch=compute_61,code=sm_61 -Xcompiler "$(CXX_FLAGS)"
+LD_FLAGS=-gencode arch=compute_61,code=sm_61
 VPATH=./src/:./obj/
 
 %.o: %.cpp  $(HEADERS)$
